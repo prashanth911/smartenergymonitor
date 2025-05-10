@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Smart Energy Monitoring</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.6.10/firebase-database-compat.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #fffaf3;
+      color: #333;
+    }
+    header {
+      text-align: center;
+      padding-bottom: 20px;
+    }
+    canvas {
+      display: block;
+      margin: 40px auto;
+      max-width: 95vw;
+      height: 500px;
+    }
+    .info {
+      text-align: center;
+      margin: 20px auto;
+      font-size: 1.2em;
+      background: #fff;
+      padding: 20px;
+      border-radius: 10px;
+      max-width: 800px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .live-data {
+      margin: 30px auto;
+      max-width: 600px;
+      padding: 20px;
+      background: #fff8ee;
+      border-left: 6px solid #ffa500;
+      border-radius: 10px;
+      font-size: 1.1em;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Smart Energy Monitoring Dashboard</h1>
+    <p class="info">
+      Track real-time power consumption, cost in ₹ per second/minute/hour, and total usage insights. Data updates automatically.<br>
+      Cost is calculated at ₹6 per kWh.
+    </p>
+  </header>
+
+  <div class="live-data" id="liveStats">
+    <strong>Latest Readings:</strong><br>
+    Vrms: <span id="vrms">--</span> V<br>
+    Current: <span id="current">--</span> A<br>
+    Power: <span id="power">--</span> W<br>
+    Cost: ₹<span id="cost">--</span><br>
+    Cost/Minute: ₹<span id="costMinute">--</span><br>
+    Cost/Hour: ₹<span id="costHour">--</span>
+  </div>
+
+  <canvas id="powerChart"></canvas>
+  <canvas id="costChart"></canvas>
+  <canvas id="costPerMinuteChart"></canvas>
+  <canvas id="costPerHourChart"></canvas>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDXikxhNQBljt7j-u92u875mbxSejy6LGQ",
+      authDomain: "smartenergymonitor-439ac.firebaseapp.com",
+      databaseURL: "https://smartenergymonitor-439ac-default-rtdb.firebaseio.com",
+      projectId: "smartenergymonitor-439ac",
+      storageBucket: "smartenergymonitor-439ac.appspot.com",
+      messagingSenderId: "749056759931",
+      appId: "1:749056759931:web:a1c10d08ee61d44ce32ade"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const labels = [];
+    const powerData = [];
+    const costData = [];
+    const costLabels = [];
+    const costPerMinuteLabels = [];
+    const costPerMinuteData = [];
+    const costPerHourLabels = [];
+    const costPerHourData = [];
+
+    const powerChart = new Chart(document.getElementById('powerChart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Power (W)',
+          data: powerData,
+          borderColor: '#fb923c',
+          backgroundColor: 'rgba(251, 146, 60, 0.2)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: true, text: 'Real-Time Power Usage' }
+        },
+        scales: {
+          x: {
+            title: { display: true, text: 'Time' },
+            ticks: { autoSkip: true, maxRotation: 0, minRotation: 0 }
+          },
+          y: { title: { display: true, text: 'Watts (W)' } }
+        }
+      }
+    });
+
+    const costChart = new Chart(document.getElementById('costChart').getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: costLabels,
+        datasets: [{
+          label: 'Estimated Cost (₹)',
+          data: costData,
+          borderColor: '#e11d48',
+          backgroundColor: 'rgba(225, 29, 72, 0.2)',
+          fill: true,
+          tension: 0.4,
+          pointRadius: 2
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: true, text: 'Real-Time Energy Cost Estimation' }
+        },
+        scales: {
+          x: {
+            title: { display: true, text: 'Time' },
+            ticks: { autoSkip: true, maxRotation: 0, minRotation: 0 }
+          },
+          y: { title: { display: true, text: 'Cost (₹)' } }
+        }
+      }
+    });
+
+    const costPerMinuteChart = new Chart(document.getElementById('costPerMinuteChart').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: costPerMinuteLabels,
+        datasets: [{
+          label: 'Cost per Minute (₹)',
+          data: costPerMinuteData,
+          backgroundColor: '#fb923c'
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: true, text: 'Energy Cost per Minute' }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Minute' } },
+          y: { title: { display: true, text: 'Cost (₹)' } }
+        }
+      }
+    });
+
+    const costPerHourChart = new Chart(document.getElementById('costPerHourChart').getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: costPerHourLabels,
+        datasets: [{
+          label: 'Cost per Hour (₹)',
+          data: costPerHourData,
+          backgroundColor: '#facc15'
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: true, text: 'Energy Cost per Hour' }
+        },
+        scales: {
+          x: { title: { display: true, text: 'Hour' } },
+          y: { title: { display: true, text: 'Cost (₹)' } }
+        }
+      }
+    });
+
+    db.ref("/energy").on("value", (snapshot) => {
+      const data = snapshot.val();
+      if (!data || !data.power) return;
+
+      const power = data.power;
+      const vrms = data.vrms;
+      const current = data.current;
+      const now = new Date();
+      const nowStr = now.toLocaleTimeString();
+      const costPerSecond = (power / 1000) * (6.0 / 3600);
+      const costPerMinute = costPerSecond * 60;
+      const costPerHour = costPerSecond * 3600;
+
+      labels.push(nowStr);
+      powerData.push(power);
+      costLabels.push(nowStr);
+      costData.push(costPerSecond.toFixed(2));
+
+      const minuteLabel = `${now.getHours()}:${now.getMinutes()}`;
+      const hourLabel = `${now.getHours()}:00`;
+
+      if (!costPerMinuteLabels.includes(minuteLabel)) {
+        costPerMinuteLabels.push(minuteLabel);
+        costPerMinuteData.push(costPerMinute);
+      } else {
+        const i = costPerMinuteLabels.indexOf(minuteLabel);
+        costPerMinuteData[i] += costPerMinute;
+      }
+
+      if (!costPerHourLabels.includes(hourLabel)) {
+        costPerHourLabels.push(hourLabel);
+        costPerHourData.push(costPerHour);
+      } else {
+        const j = costPerHourLabels.indexOf(hourLabel);
+        costPerHourData[j] += costPerHour;
+      }
+
+      document.getElementById("vrms").textContent = vrms.toFixed(3);
+      document.getElementById("current").textContent = current.toFixed(3);
+      document.getElementById("power").textContent = power.toFixed(2);
+      document.getElementById("cost").textContent = costPerSecond.toFixed(3);
+      document.getElementById("costMinute").textContent = costPerMinute.toFixed(3);
+      document.getElementById("costHour").textContent = costPerHour.toFixed(3);
+
+      powerChart.update();
+      costChart.update();
+      costPerMinuteChart.update();
+      costPerHourChart.update();
+    });
+  </script>
+</body>
+</html>
